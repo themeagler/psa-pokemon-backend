@@ -8,3 +8,4 @@ ray==2.2.0
 scipy==1.7.3
 tensorflow==2.10.0
 tqdm==4.62.3
+uvicorn==0.20.0
