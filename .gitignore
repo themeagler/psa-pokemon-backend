@@ -16,3 +16,4 @@ checkpoint/vgg16_*
 .vscode/*
 */__pycache__/*
 venv/
+venv/
