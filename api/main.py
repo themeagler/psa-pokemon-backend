@@ -1,42 +1,50 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import shutil
+from tensorflow.keras.models import load_model
+from PIL import Image
+import numpy as np
 import os
-import subprocess
+import io
 
 app = FastAPI()
 
 # Enable CORS (for frontend interaction later)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # You can restrict this to your frontend domain later
+    allow_origins=["*"],  # You can restrict this later
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# Load the trained model once on startup
+MODEL_PATH = "psa_model.h5"  # Update this if your model path differs
+model = load_model(MODEL_PATH)
+
+# Prediction logic
+def preprocess_image(image_bytes):
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = image.resize((224, 224))  # Resize to match training input
+    image_array = np.array(image) / 255.0  # Normalize
+    return np.expand_dims(image_array, axis=0)
 
 @app.post("/grade")
 async def grade_card(file: UploadFile = File(...)):
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-
-    # Save uploaded image
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # Run the model using your terminal script
     try:
-        result = subprocess.check_output(
-            ["python", "grade_my_card.py", file_path],
-            stderr=subprocess.STDOUT,
-            cwd=".."
-        ).decode("utf-8")
-        
-        # Extract prediction
-        prediction_line = next((line for line in result.splitlines() if "Predicted Grade:" in line), "Prediction not found")
-        return JSONResponse({"result": prediction_line.strip()})
-    except subprocess.CalledProcessError as e:
-        return JSONResponse({"error": e.output.decode("utf-8")}, status_code=500)
+        # Read and process image
+        image_bytes = await file.read()
+        processed = preprocess_image(image_bytes)
+
+        # Predict
+        prediction = model.predict(processed)
+        predicted_grade = int(np.argmax(prediction))
+        confidence = float(np.max(prediction))
+
+        return JSONResponse({
+            "predicted_grade": predicted_grade,
+            "confidence": round(confidence, 4)
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
