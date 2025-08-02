@@ -19,7 +19,7 @@ app.add_middleware(
 )
 
 # Load trained model
-MODEL_PATH = "psa_model.h5"
+MODEL_PATH = "psa_model.keras"
 model = load_model(MODEL_PATH)
 
 # Define label classes (must match training order)
